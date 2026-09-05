@@ -1,5 +1,6 @@
 from pathlib import Path
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+# from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage, convert_to_messages
@@ -10,11 +11,11 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-MODEL = "gpt-4.1-nano"
+MODEL = "models/gemini-3.6-flash"
 DB_NAME = str(Path(__file__).parent.parent / "vector_db")
 
-# embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 RETRIEVAL_K = 10
 
 SYSTEM_PROMPT = """
@@ -28,7 +29,7 @@ Context:
 
 vectorstore = Chroma(persist_directory=DB_NAME, embedding_function=embeddings)
 retriever = vectorstore.as_retriever()
-llm = ChatOpenAI(temperature=0, model_name=MODEL)
+llm = ChatGoogleGenerativeAI(temperature=0, model=MODEL)
 
 
 def fetch_context(question: str) -> list[Document]:
@@ -58,4 +59,10 @@ def answer_question(question: str, history: list[dict] = []) -> tuple[str, list[
     messages.extend(convert_to_messages(history))
     messages.append(HumanMessage(content=question))
     response = llm.invoke(messages)
-    return response.content, docs
+    content = response.content
+    if isinstance(content, list):
+        content = " ".join([
+            block["text"] if isinstance(block, dict) and "text" in block 
+            else str(block) for block in content
+        ])
+    return content, docs
